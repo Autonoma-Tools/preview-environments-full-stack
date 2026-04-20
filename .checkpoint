@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "slug": "preview-environments-full-stack",
+  "step": "created",
+  "completed_specs": [],
+  "pending_specs": ["docker-compose-example", "env-factory-endpoint"],
+  "created_at": "2026-04-20T00:00:00Z",
+  "updated_at": "2026-04-20T00:00:00Z"
+}
