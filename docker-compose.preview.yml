@@ -1,0 +1,83 @@
+# Preview environment stack for a full-stack app (frontend + API + Postgres).
+#
+# Usage:
+#   COMPOSE_PROJECT_NAME=pr-42 docker compose -f docker-compose.preview.yml up -d
+#   COMPOSE_PROJECT_NAME=pr-42 docker compose -f docker-compose.preview.yml down -v
+#
+# COMPOSE_PROJECT_NAME isolates containers, networks, and volumes per PR so
+# multiple previews can coexist on one host. Host ports are allocated
+# dynamically (published on an ephemeral port) to avoid collisions — look them
+# up with `docker compose -f docker-compose.preview.yml port <service> <port>`.
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: preview
+      POSTGRES_PASSWORD: preview
+      POSTGRES_DB: preview
+    ports:
+      # Publish on a random host port so multiple previews don't collide.
+      - "5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U preview -d preview"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    image: node:20-alpine
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      NODE_ENV: preview
+      PORT: "4000"
+      DATABASE_URL: postgres://preview:preview@db:5432/preview
+    command: >
+      sh -c "
+        if [ -f package.json ]; then
+          npm ci --no-audit --no-fund &&
+          npm run start
+        else
+          echo 'Mount your API source at /app to run the preview API.' &&
+          sleep infinity
+        fi
+      "
+    volumes:
+      - ./api:/app
+    ports:
+      - "4000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    image: node:20-alpine
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      NODE_ENV: preview
+      PORT: "3000"
+      API_URL: http://api:4000
+    command: >
+      sh -c "
+        if [ -f package.json ]; then
+          npm ci --no-audit --no-fund &&
+          npm run start
+        else
+          echo 'Mount your web source at /app to run the preview frontend.' &&
+          sleep infinity
+        fi
+      "
+    volumes:
+      - ./web:/app
+    ports:
+      - "3000"
+    depends_on:
+      - api
+
+volumes:
+  db-data:
